@@ -114,7 +114,7 @@ function render(status: StatusView | null) {
 function topbar(): string {
     return `
     <div class="topbar">
-      <img class="logo" src="${stashLogo}" alt="PlusClouds Backup" />
+      <img class="logo" src="${stashLogo}" alt="Stash" />
     </div>
   `;
 }
@@ -300,10 +300,10 @@ function renderDashboard(status: StatusView) {
 }
 
 // Primary update mechanism: the Go side (runner.Runner's OnStart/OnComplete
-// hooks, wired in desktop/app.go) emits "backup-agent:changed" whenever a job
+// hooks, wired in desktop/app.go) emits "stash:changed" whenever a job
 // starts/finishes — cron-triggered or run_job_now, from either this GUI or
 // the platform — so the dashboard updates immediately without polling.
-EventsOn('backup-agent:changed', refresh);
+EventsOn('stash:changed', refresh);
 
 // Safety-net poll, deliberately infrequent: covers the rare case of a missed
 // event (e.g. a race during app startup) without reintroducing constant

@@ -55,10 +55,17 @@ type CommandPayload struct {
 }
 
 // ResultPayload is the payload shape for agent → platform result messages.
+// Code is a machine-readable reason, following the same convention as
+// AlertPayload.Code (e.g. "UNKNOWN_JOB" when a command references a job the
+// agent doesn't have locally — see dispatcher.rejectedCode) — set only on
+// rejections where the platform can act on the specific reason (e.g.
+// re-sending full_sync); absent otherwise, since Message already covers the
+// human-readable case.
 type ResultPayload struct {
 	CommandID string `json:"command_id"`
 	Status    string `json:"status"`
 	Message   string `json:"message,omitempty"`
+	Code      string `json:"code,omitempty"`
 	Output    any    `json:"output,omitempty"`
 }
 
@@ -158,18 +165,30 @@ func (e *Envelope) DecodePayload(dst any) error {
 // stamped with agent_type "vm". Kept for backward compatibility with the VM
 // agent's existing call sites — new agent types should use ResultForType.
 func ResultFor(src Envelope, agentUUID, status, message string, output any) (Envelope, error) {
-	return ResultForType(src, agentUUID, "vm", status, message, output)
+	return ResultForType(src, agentUUID, "vm", status, message, "", output)
 }
 
 // ResultForType constructs a result Envelope that echoes back the command ID
-// from src, stamped with the given agent_type.
-func ResultForType(src Envelope, agentUUID, agentType, status, message string, output any) (Envelope, error) {
-	return NewForAgentType(agentUUID, agentType, TypeResult, ResultPayload{
+// from src, stamped with the given agent_type. code is an optional
+// machine-readable reason (see ResultPayload.Code) — pass "" when the plain
+// message is enough. The result also carries src's ReplyTo forward: the
+// platform sets this on sync/RPC-style commands so the agent's reply routes
+// to that specific inbox subject instead of the general evt subject — the
+// caller publishing this envelope (see daemon.Run) must check ReplyTo and
+// publish there when non-empty.
+func ResultForType(src Envelope, agentUUID, agentType, status, message, code string, output any) (Envelope, error) {
+	env, err := NewForAgentType(agentUUID, agentType, TypeResult, ResultPayload{
 		CommandID: src.ID,
 		Status:    status,
 		Message:   message,
+		Code:      code,
 		Output:    output,
 	})
+	if err != nil {
+		return Envelope{}, err
+	}
+	env.ReplyTo = src.ReplyTo
+	return env, nil
 }
 
 // NewUUID generates a random UUID v4 string. Exported for callers that need

@@ -37,12 +37,26 @@ type Shutdown func(reason string)
 
 // rejectedError marks a run() failure as a rejection (bad reference,
 // precondition not met, unknown operation) rather than an execution failure.
-type rejectedError struct{ msg string }
+// code is an optional machine-readable reason (see protocol.ResultPayload.Code)
+// for cases the platform can react to programmatically — "" otherwise.
+type rejectedError struct {
+	msg  string
+	code string
+}
 
 func (e *rejectedError) Error() string { return e.msg }
 
 func rejected(format string, args ...any) error {
 	return &rejectedError{msg: fmt.Sprintf(format, args...)}
+}
+
+// rejectedCode is rejected with an added machine-readable code — e.g.
+// "UNKNOWN_JOB" when a command references a job the agent doesn't have
+// locally (a missed or stale full_sync), so the platform can detect this
+// specific case and react (e.g. re-sending full_sync) without pattern-
+// matching the free-text message.
+func rejectedCode(code, format string, args ...any) error {
+	return &rejectedError{msg: fmt.Sprintf(format, args...), code: code}
 }
 
 // Dispatcher routes command envelopes to job/state/scheduler operations.
@@ -86,7 +100,7 @@ func (d *Dispatcher) Dispatch(ctx context.Context, env protocol.Envelope) protoc
 
 	var cmd protocol.CommandPayload
 	if err := env.DecodePayload(&cmd); err != nil {
-		return d.reject(env, "could not decode command payload: "+err.Error())
+		return d.reject(env, "could not decode command payload: "+err.Error(), "")
 	}
 	op := cmd.Operation
 
@@ -105,7 +119,7 @@ func (d *Dispatcher) Dispatch(ctx context.Context, env protocol.Envelope) protoc
 		var re *rejectedError
 		if errors.As(err, &re) {
 			d.logResult(env.ID, op, protocol.StatusRejected, re.msg, elapsed)
-			return d.reject(env, re.msg)
+			return d.reject(env, re.msg, re.code)
 		}
 		d.logResult(env.ID, op, protocol.StatusFailed, err.Error(), elapsed)
 		return d.fail(env, err.Error())
@@ -186,7 +200,7 @@ func (d *Dispatcher) runJobNow(ctx context.Context, raw json.RawMessage) (any, e
 	}
 	js, ok := d.store.GetJob(p.JobUUID)
 	if !ok {
-		return nil, rejected("unknown job %q", p.JobUUID)
+		return nil, rejectedCode("UNKNOWN_JOB", "unknown job %q", p.JobUUID)
 	}
 
 	outcome, err := d.runner.RunJob(ctx, js.Job, p.RunUUID)
@@ -219,7 +233,7 @@ func (d *Dispatcher) setPaused(raw json.RawMessage, paused bool) (any, error) {
 		return nil, rejected("could not decode params: %s", err)
 	}
 	if _, ok := d.store.GetJob(p.JobUUID); !ok {
-		return nil, rejected("unknown job %q", p.JobUUID)
+		return nil, rejectedCode("UNKNOWN_JOB", "unknown job %q", p.JobUUID)
 	}
 	if err := d.store.SetPaused(p.JobUUID, paused); err != nil {
 		return nil, rejected("%s", err.Error())
@@ -250,7 +264,7 @@ func (d *Dispatcher) verifySnapshot(ctx context.Context, raw json.RawMessage) (a
 	}
 	job, ok := d.store.GetJob(p.JobUUID)
 	if !ok {
-		return nil, rejected("unknown job %q", p.JobUUID)
+		return nil, rejectedCode("UNKNOWN_JOB", "unknown job %q", p.JobUUID)
 	}
 
 	result, err := d.runner.VerifySnapshot(ctx, job.BucketName, p.SnapshotID, job.SourcePaths, d.workDir)
@@ -285,7 +299,7 @@ func (d *Dispatcher) revoke(raw json.RawMessage) (any, error) {
 // --- result helpers -----------------------------------------------------------
 
 func (d *Dispatcher) ok(src protocol.Envelope, output any) protocol.Envelope {
-	env, err := protocol.ResultForType(src, d.agentUUID, agentType, protocol.StatusCompleted, "", output)
+	env, err := protocol.ResultForType(src, d.agentUUID, agentType, protocol.StatusCompleted, "", "", output)
 	if err != nil {
 		d.logger.Error("failed to build result envelope", zap.Error(err))
 	}
@@ -293,15 +307,15 @@ func (d *Dispatcher) ok(src protocol.Envelope, output any) protocol.Envelope {
 }
 
 func (d *Dispatcher) fail(src protocol.Envelope, msg string) protocol.Envelope {
-	env, err := protocol.ResultForType(src, d.agentUUID, agentType, protocol.StatusFailed, msg, nil)
+	env, err := protocol.ResultForType(src, d.agentUUID, agentType, protocol.StatusFailed, msg, "", nil)
 	if err != nil {
 		d.logger.Error("failed to build result envelope", zap.Error(err))
 	}
 	return env
 }
 
-func (d *Dispatcher) reject(src protocol.Envelope, msg string) protocol.Envelope {
-	env, err := protocol.ResultForType(src, d.agentUUID, agentType, protocol.StatusRejected, msg, nil)
+func (d *Dispatcher) reject(src protocol.Envelope, msg, code string) protocol.Envelope {
+	env, err := protocol.ResultForType(src, d.agentUUID, agentType, protocol.StatusRejected, msg, code, nil)
 	if err != nil {
 		d.logger.Error("failed to build result envelope", zap.Error(err))
 	}

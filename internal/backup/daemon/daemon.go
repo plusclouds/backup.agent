@@ -184,8 +184,18 @@ func Run(ctx context.Context, cfg *backupconfig.Config, logger *zap.Logger, onRe
 
 	if err := nc.Subscribe(func(env protocol.Envelope) {
 		result := disp.Dispatch(daemonCtx, env)
-		if err := nc.Publish(result); err != nil {
-			logger.Error("could not publish result", zap.String("command_id", env.ID), zap.Error(err))
+		// ReplyTo is set by the platform on sync/RPC-style commands
+		// (AgentCommandService::send) — the result must go to that specific
+		// inbox subject instead of the general evt subject, or the platform
+		// has no way to correlate it back to the waiting caller.
+		var publishErr error
+		if result.ReplyTo != "" {
+			publishErr = nc.PublishToSubject(result.ReplyTo, result)
+		} else {
+			publishErr = nc.Publish(result)
+		}
+		if publishErr != nil {
+			logger.Error("could not publish result", zap.String("command_id", env.ID), zap.Error(publishErr))
 		}
 	}); err != nil {
 		return fmt.Errorf("subscribing to NATS cmd subject: %w", err)

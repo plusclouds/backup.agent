@@ -16,12 +16,12 @@ import (
 // the tray's own "Quit" item stops the app.
 func runTray(app *App, startWails func()) {
 	systray.Run(func() {
-		systray.SetTitle("PlusClouds Backup")
-		systray.SetTooltip("PlusClouds Backup Agent")
+		systray.SetTitle("Stash")
+		systray.SetTooltip("Stash Backup Agent")
 
-		open := systray.AddMenuItem("Open", "Show the backup-agent window")
+		open := systray.AddMenuItem("Open", "Show the Stash window")
 		systray.AddSeparator()
-		quit := systray.AddMenuItem("Quit", "Stop the backup-agent and exit")
+		quit := systray.AddMenuItem("Quit", "Stop Stash and exit")
 
 		go startWails()
 

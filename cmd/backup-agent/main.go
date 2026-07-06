@@ -1,4 +1,4 @@
-// Command backup-agent is the PlusClouds backup agent daemon. It registers
+// Command stash is the PlusClouds Stash backup agent daemon. It registers
 // once with the platform (token -> bootstrap config), then connects to NATS
 // as agent_type "backup" and runs Kopia-backed backup jobs on a cron
 // schedule it owns itself. See docs/backup.agent/{overview,protocol,registration}.md.
@@ -17,13 +17,13 @@ var cfgFile string
 
 func main() {
 	root := &cobra.Command{
-		Use:     "backup-agent",
-		Short:   "PlusClouds backup agent",
+		Use:     "stash",
+		Short:   "PlusClouds Stash backup agent",
 		Version: backupconfig.AgentVersion,
 		RunE:    runDaemon,
 	}
 	root.PersistentFlags().StringVar(&cfgFile, "config", "",
-		"Path to config file (default: /etc/plusclouds/backup-agent.yaml)")
+		"Path to config file (default: /etc/plusclouds/stash.yaml)")
 
 	root.AddCommand(newRegisterCmd())
 	root.AddCommand(newRunCmd())

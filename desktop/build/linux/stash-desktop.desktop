@@ -1,9 +1,9 @@
 [Desktop Entry]
 Type=Application
-Name=PlusClouds Backup
+Name=Stash
 Comment=Manage PlusClouds backup jobs on this machine
-Exec=/usr/bin/backup-agent-desktop
-Icon=backup-agent-desktop
+Exec=/usr/bin/stash-desktop
+Icon=stash-desktop
 Terminal=false
 Categories=Utility;
 StartupNotify=true

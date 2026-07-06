@@ -17,7 +17,7 @@ func autoStartPlistPath() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(home, "Library", "LaunchAgents", "com.plusclouds.backup-agent.plist"), nil
+	return filepath.Join(home, "Library", "LaunchAgents", "com.plusclouds.stash-desktop.plist"), nil
 }
 
 const autoStartPlistTemplate = `<?xml version="1.0" encoding="UTF-8"?>
@@ -25,7 +25,7 @@ const autoStartPlistTemplate = `<?xml version="1.0" encoding="UTF-8"?>
 <plist version="1.0">
 <dict>
 	<key>Label</key>
-	<string>com.plusclouds.backup-agent</string>
+	<string>com.plusclouds.stash-desktop</string>
 	<key>ProgramArguments</key>
 	<array>
 		<string>%s</string>

@@ -15,7 +15,7 @@ var assets embed.FS
 // and main_bindings.go's binding-generation build) so they can't drift.
 func wailsAppOptions(app *App) *options.App {
 	return &options.App{
-		Title:  "PlusClouds Backup",
+		Title:  "Stash",
 		Width:  1024,
 		Height: 768,
 		// Hiding on close (rather than quitting) only makes sense where a

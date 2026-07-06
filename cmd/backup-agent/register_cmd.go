@@ -132,6 +132,8 @@ func runRegister(ctx context.Context, token, endpoint string, showRaw bool) erro
 
 	fmt.Printf("Saved to config: %s\n", configPath)
 	fmt.Printf("Saved to state:  %s\n", cfg.Agent.StateFile)
-	fmt.Println("Start the daemon with: backup-agent run")
+
+	installSystemService()
+
 	return nil
 }

@@ -14,9 +14,16 @@ the only thing that differs.
   "agent_type": "backup",
   "agent_uuid": "550e8400-e29b-41d4-a716-446655440001",
   "timestamp":  1748000000,
+  "reply_to":   "_INBOX.abc123",
   "payload":    {}
 }
 ```
+
+`reply_to` (optional, `AgentCommandService::send` sets it on sync/RPC-style
+commands) — when present on a command, the agent's `result` for it is
+published directly to this inbox subject instead of the general `.evt`
+subject, so the platform can correlate it back to the specific waiting
+caller. Absent on everything else.
 
 ## Subjects
 
@@ -140,7 +147,8 @@ via `Events::fire("alert:backup.{code}", ...)`.
 
 Reply to a platform-initiated command (`run_job_now`, `pause_job`, etc.) — the only
 path with a `command_id`, since scheduled runs never go through this method (see
-`job_run` above).
+`job_run` above). Published to the command's `reply_to` inbox subject when the
+command carried one, otherwise to the general `.evt` subject.
 
 ```json
 {
@@ -149,6 +157,7 @@ path with a `command_id`, since scheduled runs never go through this method (see
     "command_id": "...",
     "status":     "completed",
     "message":    "...",
+    "code":       "UNKNOWN_JOB",
     "output": {
       "run_uuid":          "...",
       "bytes_uploaded":    104857600,
@@ -158,6 +167,14 @@ path with a `command_id`, since scheduled runs never go through this method (see
   }
 }
 ```
+
+`code` (optional) is a machine-readable reason, set on rejections the platform
+can act on programmatically — currently just `UNKNOWN_JOB`, returned by
+`run_job_now`/`pause_job`/`resume_job`/`verify_snapshot` when the referenced
+`job_uuid` isn't in the agent's local state (a missed or stale `full_sync`).
+The platform can use this to detect the case and re-send `full_sync`, rather
+than pattern-matching `message`. Absent on `completed` results and on
+rejections without a specific machine-actionable reason.
 
 `status` values: `completed`, `failed`, `rejected` — same convention as every
 other agent type.

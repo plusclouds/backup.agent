@@ -18,11 +18,11 @@ func autoStartUnitPath() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(home, ".config", "systemd", "user", "backup-agent-desktop.service"), nil
+	return filepath.Join(home, ".config", "systemd", "user", "stash-desktop.service"), nil
 }
 
 const autoStartUnitTemplate = `[Unit]
-Description=PlusClouds Backup Agent (desktop)
+Description=Stash Backup Agent (desktop)
 
 [Service]
 Type=simple

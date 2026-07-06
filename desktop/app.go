@@ -22,7 +22,7 @@ import (
 // run_job_now from either the GUI or the platform), or the daemon itself
 // erroring out. The frontend listens for this instead of polling GetStatus
 // on a fixed timer; see frontend/src/main.ts.
-const changedEvent = "backup-agent:changed"
+const changedEvent = "stash:changed"
 
 // App is the Wails-bound struct: its exported methods are callable directly
 // from the frontend (Wails' binding mechanism generates the JS/TS glue).
@@ -44,7 +44,7 @@ func NewApp() *App {
 
 // startup is called once by Wails when the app starts. If a config already
 // exists (the user has registered before), it starts the embedded daemon in
-// the background — same daemon.Run every CLI `backup-agent run` invocation
+// the background — same daemon.Run every CLI `stash run` invocation
 // uses, just called in-process instead of from a cobra command.
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx

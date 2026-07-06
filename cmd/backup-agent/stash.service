@@ -1,5 +1,5 @@
 [Unit]
-Description=PlusClouds backup agent
+Description=PlusClouds Stash backup agent
 Documentation=https://github.com/plusclouds/backup.agent
 After=network-online.target systemd-resolved.service
 Wants=network-online.target
@@ -12,14 +12,14 @@ Group=root
 ExecStartPre=/bin/mkdir -p /var/log/plusclouds /var/lib/plusclouds
 ExecStartPre=/bin/chmod 0750 /var/log/plusclouds /var/lib/plusclouds
 
-ExecStart=/usr/local/bin/backup-agent run --config /etc/plusclouds/backup-agent.yaml
+ExecStart=/usr/local/bin/stash run --config /etc/plusclouds/stash.yaml
 
 Restart=always
 RestartSec=5
 
 StandardOutput=journal
 StandardError=journal
-SyslogIdentifier=backup-agent
+SyslogIdentifier=stash
 
 # Load optional environment overrides.
 EnvironmentFile=-/etc/plusclouds/environment

@@ -1,7 +1,7 @@
-Name: backup-agent-desktop
+Name: stash-desktop
 Version: %{_rpm_version}
 Release: 1%{?dist}
-Summary: PlusClouds Backup desktop app
+Summary: PlusClouds Stash desktop app
 License: Proprietary
 URL: https://github.com/plusclouds/backup.agent
 BuildArch: x86_64
@@ -9,7 +9,7 @@ Requires: gtk3
 Requires: %{_rpm_webkit_requires}
 
 # Binary-only package: Wails already produced the linked binary; nothing to
-# compile here. See rpm/backup-agent.spec for why debug_package is disabled.
+# compile here. See rpm/stash.spec for why debug_package is disabled.
 %define debug_package %{nil}
 
 %description
@@ -22,14 +22,14 @@ Settings toggle, not at install time.
 mkdir -p %{buildroot}/usr/bin
 mkdir -p %{buildroot}/usr/share/applications
 mkdir -p %{buildroot}/usr/share/icons/hicolor
-install -m 0755 %{_sourcedir}/backup-agent-desktop %{buildroot}/usr/bin/backup-agent-desktop
-install -m 0644 %{_sourcedir}/backup-agent-desktop.desktop %{buildroot}/usr/share/applications/backup-agent-desktop.desktop
+install -m 0755 %{_sourcedir}/stash-desktop %{buildroot}/usr/bin/stash-desktop
+install -m 0644 %{_sourcedir}/stash-desktop.desktop %{buildroot}/usr/share/applications/stash-desktop.desktop
 cp -r %{_sourcedir}/hicolor/* %{buildroot}/usr/share/icons/hicolor/
 
 %files
-/usr/bin/backup-agent-desktop
-/usr/share/applications/backup-agent-desktop.desktop
-/usr/share/icons/hicolor/*/apps/backup-agent-desktop.png
+/usr/bin/stash-desktop
+/usr/share/applications/stash-desktop.desktop
+/usr/share/icons/hicolor/*/apps/stash-desktop.png
 
 %post
 update-desktop-database /usr/share/applications >/dev/null 2>&1 || :

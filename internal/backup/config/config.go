@@ -1,7 +1,7 @@
 // Package config handles loading, and — unlike the VM agent — writing,
 // backup.agent's configuration. backup.agent has no ISO config drive: its
 // entire identity (agent_uuid, agent_api_key, bucket, access_key) is written
-// once by `backup-agent register` and read on every subsequent start.
+// once by `stash register` and read on every subsequent start.
 package config
 
 import (
@@ -25,14 +25,14 @@ const AgentVersion = "0.1.0"
 // Default file paths, mirroring this repo's existing /etc/plusclouds
 // (config) vs. /var/lib/plusclouds (state/cache) convention.
 const (
-	DefaultConfigPath = "/etc/plusclouds/backup-agent.yaml"
-	DefaultStateFile  = "/var/lib/plusclouds/backup-agent-state.json"
-	DefaultCacheDir   = "/var/lib/plusclouds/backup-agent-kopia-cache"
-	DefaultWorkDir    = "/var/lib/plusclouds/backup-agent-work"
-	DefaultLogFile    = "/var/log/plusclouds/backup-agent.log"
+	DefaultConfigPath = "/etc/plusclouds/stash.yaml"
+	DefaultStateFile  = "/var/lib/plusclouds/stash-state.json"
+	DefaultCacheDir   = "/var/lib/plusclouds/stash-kopia-cache"
+	DefaultWorkDir    = "/var/lib/plusclouds/stash-work"
+	DefaultLogFile    = "/var/log/plusclouds/stash.log"
 )
 
-// Config is the top-level configuration structure for backup-agent.
+// Config is the top-level configuration structure for stash.
 //
 // yaml tags (in addition to mapstructure) are required on every field here
 // and below because Save writes this struct out with yaml.Marshal directly
@@ -62,7 +62,7 @@ type AccessKeyConfig struct {
 	SecretKey string `mapstructure:"secret_key" yaml:"secret_key"`
 }
 
-// AgentConfig holds backup-agent behaviour settings.
+// AgentConfig holds stash's behaviour settings.
 type AgentConfig struct {
 	// HeartbeatInterval is how often the agent publishes a heartbeat event.
 	HeartbeatInterval time.Duration `mapstructure:"heartbeat_interval" yaml:"heartbeat_interval"`
@@ -84,7 +84,7 @@ type AgentConfig struct {
 }
 
 // Load reads the configuration from the given file path (or the default
-// search paths if empty), overlays PLUSCLOUDS_BACKUP_AGENT_* environment
+// search paths if empty), overlays PLUSCLOUDS_STASH_* environment
 // variables, and applies built-in defaults for anything missing.
 func Load(cfgFile string) (*Config, error) {
 	v := viper.New()
@@ -94,7 +94,7 @@ func Load(cfgFile string) (*Config, error) {
 	if cfgFile != "" {
 		v.SetConfigFile(cfgFile)
 	} else {
-		v.SetConfigName("backup-agent")
+		v.SetConfigName("stash")
 		v.SetConfigType("yaml")
 		v.AddConfigPath("/etc/plusclouds")
 		v.AddConfigPath("$HOME/.plusclouds")
@@ -114,7 +114,7 @@ func Load(cfgFile string) (*Config, error) {
 		}
 	}
 
-	v.SetEnvPrefix("PLUSCLOUDS_BACKUP_AGENT")
+	v.SetEnvPrefix("PLUSCLOUDS_STASH")
 	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	v.AutomaticEnv()
 
@@ -127,7 +127,7 @@ func Load(cfgFile string) (*Config, error) {
 }
 
 // Save writes cfg as YAML to cfgFile (default DefaultConfigPath if empty),
-// creating the parent directory if needed. Used once, by `backup-agent
+// creating the parent directory if needed. Used once, by `stash
 // register`, to persist the credentials the platform shows exactly once.
 func Save(cfgFile string, cfg *Config) error {
 	if cfgFile == "" {

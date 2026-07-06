@@ -8,16 +8,16 @@ import (
 )
 
 // desktopConfigPath returns where the desktop app's config file lives:
-// $HOME/.plusclouds/backup-agent.yaml — a path internal/backup/config.Load
-// already searches by default, so the existing CLI (`backup-agent status
-// --config ~/.plusclouds/backup-agent.yaml`) can inspect a desktop
+// $HOME/.plusclouds/stash.yaml — a path internal/backup/config.Load
+// already searches by default, so the existing CLI (`stash status
+// --config ~/.plusclouds/stash.yaml`) can inspect a desktop
 // installation with zero code changes there.
 func desktopConfigPath() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(home, ".plusclouds", "backup-agent.yaml"), nil
+	return filepath.Join(home, ".plusclouds", "stash.yaml"), nil
 }
 
 // applyDesktopDefaults points state/cache/work/log paths at per-user
@@ -39,8 +39,8 @@ func applyDesktopDefaults(cfg *backupconfig.Config) error {
 		return err
 	}
 
-	base := filepath.Join(configDir, "plusclouds", "backup-agent")
-	cache := filepath.Join(cacheDir, "plusclouds", "backup-agent")
+	base := filepath.Join(configDir, "plusclouds", "stash")
+	cache := filepath.Join(cacheDir, "plusclouds", "stash")
 
 	if cfg.Agent.StateFile == "" || cfg.Agent.StateFile == backupconfig.DefaultStateFile {
 		cfg.Agent.StateFile = filepath.Join(base, "state.json")
@@ -52,7 +52,7 @@ func applyDesktopDefaults(cfg *backupconfig.Config) error {
 		cfg.Agent.WorkDir = filepath.Join(cache, "work")
 	}
 	if cfg.Log.File == "" || cfg.Log.File == backupconfig.DefaultLogFile {
-		cfg.Log.File = filepath.Join(base, "backup-agent.log")
+		cfg.Log.File = filepath.Join(base, "stash.log")
 	}
 	return nil
 }

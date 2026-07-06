@@ -15,7 +15,7 @@ import (
 // deliberately not built here (see the desktop feature's design notes) —
 // building one needs admin rights, which contradicts a per-user desktop
 // install with nothing else to elevate for.
-const runKeyValueName = "PlusCloudsBackupAgent"
+const runKeyValueName = "PlusCloudsStash"
 
 func setAutoStart(enabled bool) error {
 	key, err := registry.OpenKey(registry.CURRENT_USER, `Software\Microsoft\Windows\CurrentVersion\Run`, registry.SET_VALUE|registry.QUERY_VALUE)

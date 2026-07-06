@@ -127,6 +127,22 @@ func TestDispatchRunJobNowUnknownJobIsRejected(t *testing.T) {
 	if rp.Status != protocol.StatusRejected {
 		t.Fatalf("expected rejected, got %q", rp.Status)
 	}
+	// UNKNOWN_JOB is machine-readable so the platform can detect a missed/stale
+	// full_sync and react (e.g. re-sending it) without pattern-matching Message.
+	if rp.Code != "UNKNOWN_JOB" {
+		t.Errorf("expected code UNKNOWN_JOB, got %q", rp.Code)
+	}
+}
+
+func TestDispatchResultPropagatesReplyTo(t *testing.T) {
+	disp, _, _, _ := newTestDispatcher(t)
+	env := command("run_job_now", map[string]any{"job_uuid": "does-not-exist", "run_uuid": "run-1"})
+	env.ReplyTo = "_INBOX.abc123"
+
+	result := disp.Dispatch(context.Background(), env)
+	if result.ReplyTo != env.ReplyTo {
+		t.Errorf("expected result to carry ReplyTo %q forward, got %q", env.ReplyTo, result.ReplyTo)
+	}
 }
 
 func TestDispatchPauseResumeCancel(t *testing.T) {
