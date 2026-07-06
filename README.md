@@ -134,7 +134,7 @@ scp bin/plusclouds.linux root@<server-ip>:/usr/local/bin/plusclouds-agent
 chmod +x /usr/local/bin/plusclouds-agent
 
 # Windows
-# Copy bin/plusclouds.windows to the target machine and run it as a service
+# Copy bin/plusclouds.exe to the target machine and run it as a service
 ```
 
 ### 2. Create the config directory
@@ -269,7 +269,7 @@ make test
 Outputs:
 ```
 bin/plusclouds.linux    — ELF 64-bit, statically linked, ~12 MB
-bin/plusclouds.windows  — PE32+, ~12 MB
+bin/plusclouds.exe      — PE32+, ~12 MB
 ```
 
 ---

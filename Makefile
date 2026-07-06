@@ -4,9 +4,9 @@ BINARY_AGENT        := plusclouds-agent
 BINARY_CTL          := plsctl
 BINARY_BACKUP_AGENT := stash
 BINARY_LINUX        := plusclouds.linux
-BINARY_WINDOWS      := plusclouds.windows
+BINARY_WINDOWS      := plusclouds.exe
 BINARY_BACKUP_LINUX   := stash.linux
-BINARY_BACKUP_WINDOWS := stash.windows
+BINARY_BACKUP_WINDOWS := stash.exe
 BINARY_BACKUP_DARWIN  := stash.darwin
 BINARY_DESKTOP        := stash-desktop
 CMD_AGENT      := ./cmd/agent
@@ -93,7 +93,7 @@ build-linux:
 	@echo "Size: $$(du -sh $(BUILD_DIR)/$(BINARY_LINUX) | cut -f1)"
 	@file $(BUILD_DIR)/$(BINARY_LINUX)
 
-## build-windows: build production binary for Windows amd64 → bin/plusclouds.windows
+## build-windows: build production binary for Windows amd64 → bin/plusclouds.exe
 build-windows:
 	@echo "Building $(BINARY_WINDOWS) $(VERSION) (windows/amd64)..."
 	@mkdir -p $(BUILD_DIR)
