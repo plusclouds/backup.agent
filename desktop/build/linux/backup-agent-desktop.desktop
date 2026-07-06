@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=PlusClouds Backup
+Comment=Manage PlusClouds backup jobs on this machine
+Exec=/usr/bin/backup-agent-desktop
+Icon=backup-agent-desktop
+Terminal=false
+Categories=Utility;
+StartupNotify=true

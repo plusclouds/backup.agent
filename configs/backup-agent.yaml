@@ -1,0 +1,39 @@
+# backup-agent Configuration
+#
+# This file is written once by `backup-agent register --token=... --endpoint=...`
+# — the platform's registration response is the source of truth for nats/bucket/
+# access_key below (see docs/backup.agent/registration.md). Values here after
+# registration are for reference/hand-editing only; re-registering overwrites them.
+# All values can also be overridden by environment variables
+# (prefix: PLUSCLOUDS_BACKUP_AGENT_).
+
+nats:
+  connection_type: nats
+  url: "nats://nats.example.com:4222"
+
+  # Written by `register` from the registration response.
+  agent_uuid: ""
+  api_key: ""
+
+  max_reconnects: -1
+  reconnect_wait: 5s
+
+bucket:
+  name: ""
+  endpoint: ""
+
+access_key:
+  access_key: ""
+  secret_key: ""
+
+agent:
+  heartbeat_interval: 30s
+  telemetry_interval: 60s
+  state_file: /var/lib/plusclouds/backup-agent-state.json
+  kopia_cache_dir: /var/lib/plusclouds/backup-agent-kopia-cache
+  work_dir: /var/lib/plusclouds/backup-agent-work
+
+log:
+  level: info
+  format: json
+  file: /var/log/plusclouds/backup-agent.log

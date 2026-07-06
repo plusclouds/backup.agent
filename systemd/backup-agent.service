@@ -1,0 +1,48 @@
+[Unit]
+Description=PlusClouds backup agent
+Documentation=https://github.com/plusclouds/backup.agent
+After=network-online.target systemd-resolved.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+
+ExecStartPre=/bin/mkdir -p /var/log/plusclouds /var/lib/plusclouds
+ExecStartPre=/bin/chmod 0750 /var/log/plusclouds /var/lib/plusclouds
+
+ExecStart=/usr/local/bin/backup-agent run --config /etc/plusclouds/backup-agent.yaml
+
+Restart=always
+RestartSec=5
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=backup-agent
+
+# Load optional environment overrides.
+EnvironmentFile=-/etc/plusclouds/environment
+
+# Security
+NoNewPrivileges=yes
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+# NOTE: pre_script jobs may need to write their output (e.g. a mysqldump)
+# somewhere under source_paths before it can be snapshotted. ProtectSystem=strict
+# makes everything outside ReadWritePaths read-only — add each job's
+# source_paths parent directory here (or relax ProtectSystem) if a pre_script
+# writes outside /var/lib/plusclouds.
+ReadWritePaths=/var/log/plusclouds /etc/plusclouds /var/lib/plusclouds
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictRealtime=true
+
+# Resource limits
+LimitNOFILE=65536
+LimitNPROC=4096
+
+[Install]
+WantedBy=multi-user.target

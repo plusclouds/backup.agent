@@ -31,29 +31,36 @@ const (
 )
 
 // NATSConfig holds NATS connection settings.
+//
+// yaml tags (in addition to mapstructure) let this struct be safely
+// yaml.Marshal'd back out to a file — e.g. by internal/backup/config.Save —
+// and re-read correctly via viper's mapstructure-based Load. Without them,
+// yaml.v3's default field-name-lowercasing (ConnectionType -> connectiontype)
+// silently produces a file viper can no longer match against these
+// mapstructure keys (connection_type) on the next load.
 type NATSConfig struct {
 	// ConnectionType selects the transport: "nats" (TCP, default) or "websocket".
 	// Use "websocket" to connect through firewalls/proxies without TLS certificates.
-	ConnectionType string `mapstructure:"connection_type"`
+	ConnectionType string `mapstructure:"connection_type" yaml:"connection_type"`
 	// URL is the NATS TCP server address, used when connection_type is "nats".
 	// Example: nats://nats.plusclouds.com:4222
-	URL string `mapstructure:"url"`
+	URL string `mapstructure:"url" yaml:"url"`
 	// WebSocketURL is the NATS WebSocket address, used when connection_type is "websocket".
 	// Use ws:// for plain WebSocket (no TLS). Example: ws://nats.plusclouds.com:8080
-	WebSocketURL string `mapstructure:"websocket_url"`
+	WebSocketURL string `mapstructure:"websocket_url" yaml:"websocket_url"`
 	// AgentUUID is the fallback VM UUID used as the NATS username when the ISO
 	// config drive is not present. The ISO virtual_machine_id always takes precedence.
 	// Can also be set via PLUSCLOUDS_AGENT_NATS_AGENT_UUID environment variable.
-	AgentUUID string `mapstructure:"agent_uuid"`
+	AgentUUID string `mapstructure:"agent_uuid" yaml:"agent_uuid"`
 	// APIKey is the fallback NATS authentication token when the ISO config drive
 	// does not carry an agent_api_key. The ISO value always takes precedence.
 	// Can also be set via PLUSCLOUDS_AGENT_NATS_API_KEY environment variable.
-	APIKey string `mapstructure:"api_key"`
+	APIKey string `mapstructure:"api_key" yaml:"api_key"`
 	// MaxReconnects controls how many times the client retries on disconnect.
 	// -1 means unlimited.
-	MaxReconnects int `mapstructure:"max_reconnects"`
+	MaxReconnects int `mapstructure:"max_reconnects" yaml:"max_reconnects"`
 	// ReconnectWait is the delay between reconnect attempts.
-	ReconnectWait time.Duration `mapstructure:"reconnect_wait"`
+	ReconnectWait time.Duration `mapstructure:"reconnect_wait" yaml:"reconnect_wait"`
 }
 
 // ActiveURL returns the server URL for the configured connection type.
@@ -90,13 +97,13 @@ type ISOConfig struct {
 // LogConfig holds logging settings.
 type LogConfig struct {
 	// Level is the minimum log level: debug, info, warn, error.
-	Level string `mapstructure:"level"`
+	Level string `mapstructure:"level" yaml:"level"`
 	// Format controls log output to stdout: json or console.
-	Format string `mapstructure:"format"`
+	Format string `mapstructure:"format" yaml:"format"`
 	// File is an optional path to write logs to in addition to stdout.
 	// Always written in JSON format regardless of the Format setting.
 	// Leave empty to disable file logging.
-	File string `mapstructure:"file"`
+	File string `mapstructure:"file" yaml:"file"`
 }
 
 // AutohealConfig holds automatic service recovery settings.

@@ -16,12 +16,15 @@ import (
 // Client wraps a NATS connection for the agent.
 type Client struct {
 	conn      *nats.Conn
+	agentType string
 	agentUUID string
 	logger    *zap.Logger
 }
 
 // Connect establishes a NATS connection authenticated with agentUUID / agentAPIKey
-// and returns a ready Client.
+// and returns a ready Client stamped with agent_type "vm". Kept for backward
+// compatibility with the VM agent's existing call site — new agent types
+// should use ConnectForAgentType.
 //
 // The agent JWT issued by the NATS auth callout grants permission only to:
 //   - Subscribe: agent.vm.{uuid}.cmd
@@ -32,8 +35,17 @@ type Client struct {
 // handled server-side by the AGENT_COMMANDS JetStream stream; the platform
 // retries unacknowledged commands via AgentCommandTimeoutCommand.
 func Connect(cfg config.NATSConfig, agentUUID, agentAPIKey string, logger *zap.Logger) (*Client, error) {
+	return ConnectForAgentType(cfg, "vm", agentUUID, agentAPIKey, logger)
+}
+
+// ConnectForAgentType establishes a NATS connection authenticated with
+// agentUUID / agentAPIKey and returns a ready Client stamped with the given
+// agent_type. The agent JWT issued by the NATS auth callout grants
+// permission only to subscribe to agent.{agentType}.{uuid}.cmd and publish
+// to agent.{agentType}.{uuid}.evt — same generic pattern for every agent type.
+func ConnectForAgentType(cfg config.NATSConfig, agentType, agentUUID, agentAPIKey string, logger *zap.Logger) (*Client, error) {
 	opts := []nats.Option{
-		nats.Name("plusclouds-vm-agent:" + agentUUID),
+		nats.Name("plusclouds-" + agentType + "-agent:" + agentUUID),
 		nats.UserInfo(agentUUID, agentAPIKey),
 		nats.MaxReconnects(cfg.MaxReconnects),
 		nats.ReconnectWait(cfg.ReconnectWait),
@@ -69,6 +81,7 @@ func Connect(cfg config.NATSConfig, agentUUID, agentAPIKey string, logger *zap.L
 
 	return &Client{
 		conn:      nc,
+		agentType: agentType,
 		agentUUID: agentUUID,
 		logger:    logger,
 	}, nil
@@ -76,12 +89,12 @@ func Connect(cfg config.NATSConfig, agentUUID, agentAPIKey string, logger *zap.L
 
 // CmdSubject returns the subject the agent subscribes to for inbound commands.
 func (c *Client) CmdSubject() string {
-	return "agent.vm." + c.agentUUID + ".cmd"
+	return "agent." + c.agentType + "." + c.agentUUID + ".cmd"
 }
 
 // EvtSubject returns the subject the agent publishes events to.
 func (c *Client) EvtSubject() string {
-	return "agent.vm." + c.agentUUID + ".evt"
+	return "agent." + c.agentType + "." + c.agentUUID + ".evt"
 }
 
 // TelemetrySubject returns the client-facing telemetry subject captured by

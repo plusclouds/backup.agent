@@ -33,6 +33,14 @@ go.work.sum
 
 # Build output
 bin/
+dist/
 
 # Knowledge graph
 graphify-out/
+
+# Local Kopia repository state from manual/live testing against a real
+# bucket — not source, and tied to whichever repository was last tested.
+blob-list/
+indexes/
+kopia.blobcfg
+kopia.repository
