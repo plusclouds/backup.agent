@@ -4,6 +4,7 @@ BINARY_AGENT        := plusclouds-agent
 BINARY_CTL          := plsctl
 BINARY_BACKUP_AGENT := stash
 BINARY_LINUX        := plusclouds.linux
+BINARY_CTL_LINUX    := plsctl.linux
 BINARY_WINDOWS      := plusclouds.exe
 BINARY_BACKUP_LINUX   := stash.linux
 BINARY_BACKUP_WINDOWS := stash.exe
@@ -52,7 +53,7 @@ CONFIG_DIR     := /etc/plusclouds
 LOG_DIR        := /var/log/plusclouds
 STATE_DIR      := /var/lib/plusclouds
 
-.PHONY: all build build-agent build-ctl build-stash build-prod build-linux build-windows \
+.PHONY: all build build-agent build-ctl build-stash build-prod build-linux build-ctl-linux build-windows \
 	build-stash-linux build-stash-windows build-stash-darwin build-all \
 	build-stash-desktop build-stash-desktop-linux build-stash-desktop-windows build-stash-desktop-darwin \
 	test lint clean install install-stash uninstall uninstall-stash \
@@ -92,6 +93,15 @@ build-linux:
 	@echo "Done: $(BUILD_DIR)/$(BINARY_LINUX)"
 	@echo "Size: $$(du -sh $(BUILD_DIR)/$(BINARY_LINUX) | cut -f1)"
 	@file $(BUILD_DIR)/$(BINARY_LINUX)
+
+## build-ctl-linux: build production plsctl CLI for Linux amd64 → bin/plsctl.linux
+build-ctl-linux:
+	@echo "Building $(BINARY_CTL_LINUX) $(VERSION) (linux/amd64)..."
+	@mkdir -p $(BUILD_DIR)
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+		go build -trimpath $(LDFLAGS_PROD) \
+		-o $(BUILD_DIR)/$(BINARY_CTL_LINUX) $(CMD_CTL)
+	@echo "Done: $(BUILD_DIR)/$(BINARY_CTL_LINUX)"
 
 ## build-windows: build production binary for Windows amd64 → bin/plusclouds.exe
 build-windows:
@@ -252,15 +262,18 @@ uninstall-stash:
 	@echo "Uninstall complete. Config, state, and logs preserved."
 
 ## package-deb: build a .deb package for distribution
-package-deb: build-prod
+## Copies the production linux builds under their installed names —
+## the systemd unit execs /usr/local/bin/$(BINARY_AGENT), so the .deb
+## must ship them as plusclouds-agent/plsctl, not plusclouds.linux.
+package-deb: build-linux build-ctl-linux
 	@echo "Packaging .deb ($(DEB_VERSION))..."
 	@mkdir -p dist/deb/DEBIAN
 	@mkdir -p dist/deb/usr/local/bin
 	@mkdir -p dist/deb/etc/systemd/system
 	@mkdir -p dist/deb/etc/plusclouds
 	@mkdir -p dist/deb/var/log/plusclouds
-	cp $(BUILD_DIR)/$(BINARY_AGENT) dist/deb/usr/local/bin/
-	cp $(BUILD_DIR)/$(BINARY_CTL)   dist/deb/usr/local/bin/
+	cp $(BUILD_DIR)/$(BINARY_LINUX)     dist/deb/usr/local/bin/$(BINARY_AGENT)
+	cp $(BUILD_DIR)/$(BINARY_CTL_LINUX) dist/deb/usr/local/bin/$(BINARY_CTL)
 	cp systemd/plusclouds-agent.service dist/deb/etc/systemd/system/
 	cp configs/agent.yaml dist/deb/etc/plusclouds/agent.yaml
 	@printf "Package: plusclouds-agent\n\
