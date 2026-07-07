@@ -1,4 +1,4 @@
-//go:build !linux
+//go:build !linux && !darwin
 
 package main
 
@@ -7,11 +7,12 @@ import (
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
-// runTray blocks on systray's own event loop. On Windows/macOS this is safe
-// to run alongside Wails' own window — neither backend there is GTK-based,
+// runTray blocks on systray's own event loop. On Windows this is safe
+// to run alongside Wails' own window — the backend there is not GTK-based,
 // so there's no shared-main-loop conflict (unlike Linux; see
 // tray_linux.go's doc comment for why that platform skips the tray
-// entirely). Wails itself starts from onReady, in its own goroutine.
+// entirely, and tray_darwin.go for why macOS does too).
+// Wails itself starts from onReady, in its own goroutine.
 // Closing the window hides it (HideWindowOnClose, see wailsopts.go); only
 // the tray's own "Quit" item stops the app.
 func runTray(app *App, startWails func()) {
