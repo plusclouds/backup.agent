@@ -1,0 +1,146 @@
+# Release build — runs automatically when a v* tag is pushed.
+#
+# Produces every distributable the Makefile knows how to build:
+#   - CLI binaries: plusclouds.linux, plusclouds.exe, stash.linux,
+#     stash.exe, stash.darwin (amd64) + stash.darwin-arm64
+#   - Packages: plusclouds-agent .deb, stash .deb/.rpm,
+#     stash-desktop .deb/.rpm (Linux GUI)
+#   - Desktop apps: stash-desktop for macOS (universal .app, zipped)
+#     and Windows (.exe)
+# and attaches everything to a GitHub Release for the tag.
+#
+# WAILS_TAGS=webkit2_41 on the Linux desktop job: ubuntu-latest (24.04+)
+# only ships libwebkit2gtk-4.1 — see the Makefile's package-deb-stash-desktop
+# comment for the full story.
+
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  cli:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history + tags so `git describe` versions correctly
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Install packaging tools
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends fakeroot rpm
+      - name: Build all CLI binaries
+        run: make build-all
+      - name: Build stash for macOS arm64 (Apple Silicon)
+        run: |
+          CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 \
+            go build -trimpath \
+            -ldflags "-s -w -X github.com/plusclouds/ubuntu-agent/internal/backup/config.AgentVersion=$(git describe --tags --always --dirty)" \
+            -o bin/stash.darwin-arm64 ./cmd/backup-agent
+      - name: Build packages
+        run: make package-deb package-deb-stash package-rpm-stash
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cli
+          path: |
+            bin/plusclouds.linux
+            bin/plusclouds.exe
+            bin/stash.linux
+            bin/stash.exe
+            bin/stash.darwin
+            bin/stash.darwin-arm64
+            dist/*.deb
+            dist/*.rpm
+
+  desktop-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install desktop build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            fakeroot rpm libgtk-3-dev libwebkit2gtk-4.1-dev
+          go install github.com/wailsapp/wails/v2/cmd/wails@latest
+      - name: Build + package Linux desktop app
+        run: make package-deb-stash-desktop package-rpm-stash-desktop WAILS_TAGS=webkit2_41
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-linux
+          path: |
+            dist/stash-desktop_*.deb
+            dist/stash-desktop-*.rpm
+
+  desktop-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install Wails
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
+      - name: Build macOS desktop app (universal)
+        run: cd desktop && wails build -platform darwin/universal
+      - name: Zip .app bundle
+        run: |
+          cd desktop/build/bin
+          ditto -c -k --keepParent *.app stash-desktop-darwin-universal.app.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-macos
+          path: desktop/build/bin/stash-desktop-darwin-universal.app.zip
+
+  desktop-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install Wails
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
+      - name: Build Windows desktop app
+        run: cd desktop && wails build -platform windows/amd64
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-windows
+          path: desktop/build/bin/*.exe
+
+  release:
+    needs: [cli, desktop-linux, desktop-macos, desktop-windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/**/*
+          generate_release_notes: true
