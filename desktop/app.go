@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"go.uber.org/zap"
 
@@ -76,6 +77,29 @@ func (a *App) emitChanged() {
 	if a.ctx != nil {
 		wailsruntime.EventsEmit(a.ctx, changedEvent)
 	}
+}
+
+// onResume is wired to windows.Options.OnResume (see wailsopts.go), which
+// fires on WM_POWERBROADCAST when Windows exits Modern Standby. WebView2's
+// GPU compositor has been observed deadlocking against the host's Intel iGPU
+// driver a few minutes after such a resume — Application Hang events for
+// stash-desktop.exe in the Windows Event Log, timestamped shortly after
+// Kernel-Power resume events. Same class of dxgkrnl deadlock as the
+// launch-time hang WebviewGpuIsDisabled addresses, just triggered later by
+// the next natural repaint instead of startup. Forcing a hide/show cycle a
+// couple seconds after resume — once the driver has had a moment to settle —
+// makes WebView2 recreate its render surface proactively instead of wedging
+// on that later repaint.
+func (a *App) onResume() {
+	go func() {
+		time.Sleep(2 * time.Second)
+		if a.ctx == nil {
+			return
+		}
+		wailsruntime.WindowHide(a.ctx)
+		time.Sleep(200 * time.Millisecond)
+		wailsruntime.WindowShow(a.ctx)
+	}()
 }
 
 // shutdown is called by Wails when the app is closing (tray "Quit") — stop

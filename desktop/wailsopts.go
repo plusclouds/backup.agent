@@ -44,6 +44,10 @@ func wailsAppOptions(app *App) *options.App {
 		// this app's UI.
 		Windows: &windows.Options{
 			WebviewGpuIsDisabled: true,
+			// OnResume: mitigates a WebView2/Intel-iGPU deadlock that hangs
+			// the app a few minutes after resuming from Modern Standby — see
+			// App.onResume's doc comment for the diagnosis.
+			OnResume: app.onResume,
 		},
 	}
 }
