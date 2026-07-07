@@ -6,6 +6,7 @@ import (
 
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
+	"github.com/wailsapp/wails/v2/pkg/options/windows"
 )
 
 //go:embed all:frontend/dist
@@ -34,6 +35,15 @@ func wailsAppOptions(app *App) *options.App {
 		OnShutdown:       app.shutdown,
 		Bind: []interface{}{
 			app,
+		},
+		// WebviewGpuIsDisabled: observed a dxgkrnl!ProcessDeadlockThread
+		// live-kernel watchdog event (GPU driver deadlock, TDR-recovered) in
+		// the Windows Application log coinciding with the window hanging on
+		// launch — WebView2's GPU compositor deadlocking against the host
+		// GPU driver. Rendering falls back to software; still smooth for
+		// this app's UI.
+		Windows: &windows.Options{
+			WebviewGpuIsDisabled: true,
 		},
 	}
 }
