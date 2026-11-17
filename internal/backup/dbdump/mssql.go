@@ -102,7 +102,11 @@ func (m *mssql) DumpDir(ctx context.Context) (string, error) {
 }
 
 func (m *mssql) open() (*sql.DB, error) {
-	db, err := sql.Open("sqlserver", m.dsn())
+	conn, err := withLocalInstance(m.conn)
+	if err != nil {
+		return nil, err
+	}
+	db, err := sql.Open("sqlserver", (&mssql{conn: conn}).dsn())
 	if err != nil {
 		return nil, fmt.Errorf("mssql: %w", err)
 	}
