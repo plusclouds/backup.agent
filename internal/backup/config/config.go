@@ -21,7 +21,7 @@ import (
 
 // AgentVersion is set at build time via -ldflags, independent of the VM
 // agent's own version line.
-const AgentVersion = "0.1.0"
+var AgentVersion = "0.1.0"
 
 // Default file paths. Linux and macOS follow this repo's existing
 // /etc/plusclouds (config) vs. /var/lib/plusclouds (state/cache) convention;
