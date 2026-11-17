@@ -23,12 +23,13 @@ func main() {
 		RunE:    runDaemon,
 	}
 	root.PersistentFlags().StringVar(&cfgFile, "config", "",
-		"Path to config file (default: /etc/plusclouds/stash.yaml)")
+		"Path to config file (default: "+backupconfig.DefaultConfigPath+")")
 
 	root.AddCommand(newRegisterCmd())
 	root.AddCommand(newRunCmd())
 	root.AddCommand(newStatusCmd())
 	root.AddCommand(newDBCmd())
+	root.AddCommand(newServiceCmd())
 
 	if err := root.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)

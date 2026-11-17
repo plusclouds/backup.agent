@@ -39,6 +39,14 @@ func runDaemon(_ *cobra.Command, _ []string) error {
 	}
 	defer logger.Sync() //nolint:errcheck
 
+	// Started by the Windows Service Control Manager: it, not an OS signal,
+	// tells the daemon when to stop.
+	if handled, err := runAsSystemService(func(ctx context.Context) error {
+		return daemon.Run(ctx, cfg, logger, nil)
+	}); handled {
+		return err
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
