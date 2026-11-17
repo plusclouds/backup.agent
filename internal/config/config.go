@@ -13,7 +13,7 @@ import (
 )
 
 // AgentVersion is set at build time via -ldflags.
-const AgentVersion = "0.2.0"
+var AgentVersion = "0.2.0"
 
 // Config is the top-level configuration structure for the agent.
 type Config struct {
