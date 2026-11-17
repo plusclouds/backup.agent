@@ -102,3 +102,31 @@ stash.exe db list --engine mssql
 
 Run from an administrator shell this uses *your* Windows account, not
 Local System, so it can succeed where the service would be refused.
+
+## MySQL, MariaDB and PostgreSQL database jobs
+
+These engines are backed up with their own client tools (`mysql` and
+`mysqldump`, `psql` and `pg_dump`). Their Windows installers do not put the
+tools on `PATH`, so the agent also looks in the usual install directories
+under `Program Files` — `MySQL\MySQL Server <version>\bin`,
+`MariaDB <version>\bin`, `PostgreSQL\<version>\bin` — and uses the newest
+version it finds. Set `bin_dir` on the connection to use a different one.
+(The same search exists on Linux and macOS, over the locations their
+package managers and installers use.)
+
+The login cannot be found automatically. Unlike SQL Server there is no
+Windows sign-in to fall back on, so the connection needs a user and password:
+
+```yaml
+databases:
+    mysql:
+        default:
+            host: 127.0.0.1
+            port: 3306
+            user: backup
+            password: "..."
+```
+
+The password is stored in `stash.yaml` in plain text; see the note on that
+file's access list above. Use an account that can only read, not `root`.
+
