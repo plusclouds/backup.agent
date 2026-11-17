@@ -148,3 +148,46 @@ func TestRunReportsMissingTool(t *testing.T) {
 		t.Fatalf("expected a bin_dir error, got %v", err)
 	}
 }
+
+type stubDriverWithUnlisted struct {
+	stubDriver
+	unlisted []string
+}
+
+func (s stubDriverWithUnlisted) UnlistedDatabases() []string { return s.unlisted }
+
+func TestSelectHonoursUnlistedDatabases(t *testing.T) {
+	drv := stubDriverWithUnlisted{
+		stubDriver: stubDriver{names: []string{"app", "shop"}},
+		unlisted:   []string{"postgres"},
+	}
+
+	// Named explicitly, an unlisted database is still dumped…
+	got, err := Select(context.Background(), drv, []string{"postgres", "app"}, false)
+	if err != nil {
+		t.Fatalf("Select: %v", err)
+	}
+	if want := []string{"postgres", "app"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+
+	// …but it is not part of "all"…
+	got, err = Select(context.Background(), drv, nil, true)
+	if err != nil {
+		t.Fatalf("Select: %v", err)
+	}
+	if want := []string{"app", "shop"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("all = %v, want %v", got, want)
+	}
+
+	// …and it does not make other unknown names acceptable.
+	if _, err := Select(context.Background(), drv, []string{"template1"}, false); err == nil {
+		t.Error("an unknown database was accepted")
+	}
+}
+
+func TestPostgresUnlistedIsOnlyTheMaintenanceDatabase(t *testing.T) {
+	if got, want := (&postgres{}).UnlistedDatabases(), []string{"postgres"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("unlisted = %v, want %v", got, want)
+	}
+}
