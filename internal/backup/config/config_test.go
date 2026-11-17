@@ -3,6 +3,8 @@ package config
 import (
 	"path/filepath"
 	"testing"
+
+	"github.com/plusclouds/ubuntu-agent/internal/backup/dbdump"
 )
 
 // TestSaveLoadRoundTrip guards against the yaml/mapstructure tag mismatch
@@ -86,5 +88,40 @@ func TestLoadToleratesMissingExplicitConfigFile(t *testing.T) {
 	}
 	if cfg.Agent.HeartbeatInterval == 0 {
 		t.Errorf("expected defaults to still apply when the config file is missing")
+	}
+}
+
+// TestDatabasesRoundTrip covers the "databases" section the same way
+// TestSaveLoadRoundTrip covers the rest: every dbdump.Conn field has to
+// survive Save -> Load, and lookups have to work with the lowercased keys
+// viper hands back.
+func TestDatabasesRoundTrip(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "stash.yaml")
+
+	var cfg Config
+	cfg.Databases = map[string]map[string]dbdump.Conn{
+		"mssql": {
+			"default": {Host: "localhost", Port: 1433, Instance: "SQLEXPRESS", User: "backup", Password: "pw", DumpDir: `D:\Backups`},
+		},
+		"mysql": {
+			"Reporting": {Socket: "/tmp/mysql.sock", BinDir: "/opt/mysql/bin"},
+		},
+	}
+	if err := Save(path, &cfg); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	loaded, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+
+	if got, want := loaded.DBConn("mssql", ""), cfg.Databases["mssql"]["default"]; got != want {
+		t.Errorf("mssql default connection = %+v, want %+v", got, want)
+	}
+	if got, want := loaded.DBConn("MySQL", "Reporting"), cfg.Databases["mysql"]["Reporting"]; got != want {
+		t.Errorf("mysql Reporting connection = %+v, want %+v", got, want)
+	}
+	if got := loaded.DBConn("postgres", ""); got != (dbdump.Conn{}) {
+		t.Errorf("an unconfigured engine should give the zero Conn, got %+v", got)
 	}
 }

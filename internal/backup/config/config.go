@@ -15,6 +15,7 @@ import (
 	"github.com/spf13/viper"
 	"gopkg.in/yaml.v3"
 
+	"github.com/plusclouds/ubuntu-agent/internal/backup/dbdump"
 	vmconfig "github.com/plusclouds/ubuntu-agent/internal/config"
 )
 
@@ -22,14 +23,16 @@ import (
 // agent's own version line.
 const AgentVersion = "0.1.0"
 
-// Default file paths, mirroring this repo's existing /etc/plusclouds
-// (config) vs. /var/lib/plusclouds (state/cache) convention.
-const (
-	DefaultConfigPath = "/etc/plusclouds/stash.yaml"
-	DefaultStateFile  = "/var/lib/plusclouds/stash-state.json"
-	DefaultCacheDir   = "/var/lib/plusclouds/stash-kopia-cache"
-	DefaultWorkDir    = "/var/lib/plusclouds/stash-work"
-	DefaultLogFile    = "/var/log/plusclouds/stash.log"
+// Default file paths. Linux and macOS follow this repo's existing
+// /etc/plusclouds (config) vs. /var/lib/plusclouds (state/cache) convention;
+// Windows keeps everything under %ProgramData%\PlusClouds\Stash. The values
+// are set per OS in paths_unix.go and paths_windows.go.
+var (
+	DefaultConfigPath = defaultConfigPath()
+	DefaultStateFile  = defaultStateFile()
+	DefaultCacheDir   = defaultCacheDir()
+	DefaultWorkDir    = defaultWorkDir()
+	DefaultLogFile    = defaultLogFile()
 )
 
 // Config is the top-level configuration structure for stash.
@@ -46,6 +49,24 @@ type Config struct {
 	AccessKey AccessKeyConfig     `mapstructure:"access_key" yaml:"access_key"`
 	Agent     AgentConfig         `mapstructure:"agent" yaml:"agent"`
 	Log       vmconfig.LogConfig  `mapstructure:"log" yaml:"log"`
+	// Databases holds local connection settings for job_type "database" jobs,
+	// keyed by engine ("postgres", "mysql", "mssql") then by connection name
+	// ("default" unless the job names another). It is written by the
+	// operator, never by the platform: database credentials stay on this
+	// machine. Entirely optional — a missing entry means the engine's own
+	// local defaults.
+	Databases map[string]map[string]dbdump.Conn `mapstructure:"databases" yaml:"databases,omitempty"`
+}
+
+// DBConn returns the local connection settings for engine/name, or the zero
+// Conn (engine defaults) if none is configured. An empty name means
+// dbdump.DefaultConnection. Lookups are case-insensitive because viper
+// lowercases every key it reads.
+func (c *Config) DBConn(engine, name string) dbdump.Conn {
+	if name == "" {
+		name = dbdump.DefaultConnection
+	}
+	return c.Databases[strings.ToLower(engine)][strings.ToLower(name)]
 }
 
 // BucketConfig holds the agent's dedicated S3-compatible bucket, returned at
@@ -96,7 +117,7 @@ func Load(cfgFile string) (*Config, error) {
 	} else {
 		v.SetConfigName("stash")
 		v.SetConfigType("yaml")
-		v.AddConfigPath("/etc/plusclouds")
+		v.AddConfigPath(filepath.Dir(DefaultConfigPath))
 		v.AddConfigPath("$HOME/.plusclouds")
 		v.AddConfigPath("./configs")
 		v.AddConfigPath(".")
@@ -146,6 +167,12 @@ func Save(cfgFile string, cfg *Config) error {
 
 	if err := os.WriteFile(cfgFile, data, 0o640); err != nil {
 		return fmt.Errorf("writing config file %s: %w", cfgFile, err)
+	}
+	// The file holds the agent's API key and S3 secret. The mode above is
+	// what keeps it private on Linux and macOS; Windows ignores it, so the
+	// access list is set separately there.
+	if err := restrictToAdmins(cfgFile); err != nil {
+		return fmt.Errorf("restricting access to config file %s: %w", cfgFile, err)
 	}
 	return nil
 }

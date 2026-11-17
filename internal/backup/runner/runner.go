@@ -12,11 +12,13 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"runtime"
 	"time"
 
 	"go.uber.org/zap"
 
+	"github.com/plusclouds/ubuntu-agent/internal/backup/dbdump"
 	"github.com/plusclouds/ubuntu-agent/internal/backup/engine"
 	"github.com/plusclouds/ubuntu-agent/internal/backup/registry"
 	"github.com/plusclouds/ubuntu-agent/internal/backup/state"
@@ -28,6 +30,11 @@ import (
 var ErrAlreadyRunning = errors.New("job already running")
 
 const defaultScriptTimeout = 5 * time.Minute
+
+// defaultDumpTimeout bounds a database job's whole dump phase when the job
+// sets no script_timeout_s — far longer than a script's default, since
+// dumping a real database routinely takes more than five minutes.
+const defaultDumpTimeout = time.Hour
 
 // Outcome is the result of one job run, regardless of trigger (cron or
 // run_job_now) — the shape both the job_run event and the run_job_now
@@ -60,6 +67,17 @@ type Runner struct {
 	// starts (i.e. right after New) to avoid missing an early run.
 	OnStart    func(job state.Job)
 	OnComplete func(job state.Job, outcome Outcome)
+
+	// Database support (job_type "database"), set by the caller right after
+	// New, same as the hooks above. All three are optional:
+	//   - DBConn resolves a job's (engine, connection name) to local
+	//     connection settings; nil means engine defaults for everything.
+	//   - DumpDir is the parent of the per-job scratch directory dumps are
+	//     written to; empty means the OS temp directory.
+	//   - NewDriver builds the engine driver; nil means dbdump.New.
+	DBConn    func(engine, connection string) dbdump.Conn
+	DumpDir   string
+	NewDriver dbdump.Factory
 }
 
 // New creates a Runner. exec should be built with a generous timeout ceiling
@@ -93,13 +111,25 @@ func (r *Runner) RunJob(ctx context.Context, job state.Job, runUUID string) (Out
 		}
 	}
 
-	if err := ensureSourcePathsPresent(job.SourcePaths); err != nil {
+	sourcePaths := job.SourcePaths
+	if job.JobType == state.JobTypeDatabase {
+		dumpDir, cleanup, err := r.dumpDatabases(runCtx, job)
+		// The dumps are scratch data: gone once the run ends, whether the
+		// snapshot below succeeded or not.
+		defer cleanup()
+		if err != nil {
+			return r.fail(job, outcome, fmt.Errorf("database dump: %w", err)), nil
+		}
+		sourcePaths = []string{dumpDir}
+	}
+
+	if err := ensureSourcePathsPresent(sourcePaths); err != nil {
 		return r.fail(job, outcome, err), nil
 	}
 
 	result, err := r.engine.Snapshot(runCtx, engine.SnapshotSpec{
 		JobUUID:            job.UUID,
-		SourcePaths:        job.SourcePaths,
+		SourcePaths:        sourcePaths,
 		KeepLastN:          job.KeepLastN,
 		KeepForDays:        job.KeepForDays,
 		BandwidthLimitMbps: job.BandwidthLimitMbps,
@@ -165,6 +195,114 @@ func (r *Runner) runPreScript(ctx context.Context, job state.Job) error {
 		return err
 	}
 	return nil
+}
+
+// driver builds the dump driver for a (engine, connection name) pair using
+// the Runner's DBConn/NewDriver hooks.
+func (r *Runner) driver(engineName, connection string) (dbdump.Driver, error) {
+	var conn dbdump.Conn
+	if r.DBConn != nil {
+		conn = r.DBConn(engineName, connection)
+	}
+	factory := r.NewDriver
+	if factory == nil {
+		factory = dbdump.New
+	}
+	return factory(engineName, conn)
+}
+
+// ListDatabases returns the user databases visible over the given local
+// connection — what the platform's list_databases command shows in its
+// database picker.
+func (r *Runner) ListDatabases(ctx context.Context, engineName, connection string) ([]string, error) {
+	drv, err := r.driver(engineName, connection)
+	if err != nil {
+		return nil, err
+	}
+	return drv.ListDatabases(ctx)
+}
+
+// dumpDatabases dumps every database job.Database selects into a fresh
+// per-job directory and returns that directory. Any failure — unknown
+// database, failed dump, timeout — is returned before the backup engine is
+// touched, the same guarantee pre_script gives. cleanup is always non-nil
+// and safe to call, including after an error.
+func (r *Runner) dumpDatabases(ctx context.Context, job state.Job) (dir string, cleanup func(), err error) {
+	cleanup = func() {}
+
+	spec := job.Database
+	if spec == nil {
+		return "", cleanup, fmt.Errorf("job has no database settings")
+	}
+
+	timeout := time.Duration(job.ScriptTimeoutS) * time.Second
+	if timeout <= 0 {
+		timeout = defaultDumpTimeout
+	}
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	drv, err := r.driver(spec.Engine, spec.Connection)
+	if err != nil {
+		return "", cleanup, err
+	}
+	databases, err := dbdump.Select(ctx, drv, spec.Databases, spec.All)
+	if err != nil {
+		return "", cleanup, err
+	}
+
+	base := r.DumpDir
+	if base == "" {
+		base = os.TempDir()
+	}
+	// SQL Server writes the dump files itself, so they have to go where its
+	// service account can write, not into the agent's own work directory.
+	if p, ok := drv.(dbdump.DumpDirProvider); ok {
+		if base, err = p.DumpDir(ctx); err != nil {
+			return "", cleanup, err
+		}
+	}
+
+	dir = filepath.Join(base, "stash-dump-"+job.UUID)
+	// A crashed earlier run may have left files behind; they must not be
+	// mistaken for, or uploaded alongside, this run's dumps.
+	if err := os.RemoveAll(dir); err != nil {
+		return "", cleanup, fmt.Errorf("clearing dump directory: %w", err)
+	}
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return "", cleanup, fmt.Errorf("creating dump directory: %w", err)
+	}
+	// A copy, not the named result: error returns below set dir to "", and
+	// the cleanup must still remove the real directory.
+	dumpDir := dir
+	cleanup = func() {
+		if err := os.RemoveAll(dumpDir); err != nil {
+			r.logger.Warn("could not remove dump directory", zap.String("dir", dumpDir), zap.Error(err))
+		}
+	}
+
+	for _, name := range databases {
+		started := time.Now()
+		path, err := drv.Dump(ctx, name, dir)
+		if err != nil {
+			return "", cleanup, fmt.Errorf("%s: %w", name, err)
+		}
+		info, err := os.Stat(path)
+		if err != nil {
+			return "", cleanup, fmt.Errorf("%s: dump file missing after dump: %w", name, err)
+		}
+		if info.Size() == 0 {
+			return "", cleanup, fmt.Errorf("%s: dump file is empty", name)
+		}
+		r.logger.Info("database dumped",
+			zap.String("job_uuid", job.UUID),
+			zap.String("engine", spec.Engine),
+			zap.String("database", name),
+			zap.Int64("bytes", info.Size()),
+			zap.Duration("elapsed", time.Since(started)),
+		)
+	}
+	return dir, cleanup, nil
 }
 
 // writeTempScript writes content to a new temp file, executable on

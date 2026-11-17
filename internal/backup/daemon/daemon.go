@@ -166,6 +166,10 @@ func Run(ctx context.Context, cfg *backupconfig.Config, logger *zap.Logger, onRe
 	execTimeoutCeiling := 24 * time.Hour // per-job script_timeout_s enforced via context, not this ceiling
 	exec := executor.NewWithTimeout(logger, execTimeoutCeiling)
 	run := runner.New(eng, reg, st, exec, logger)
+	// job_type "database": connection settings come from the local config
+	// only (never from the platform), dumps are staged under the work dir.
+	run.DBConn = cfg.DBConn
+	run.DumpDir = filepath.Join(cfg.Agent.WorkDir, "dumps")
 
 	// onReady fires here — before sched.Start() below — so a caller setting
 	// run.OnStart/run.OnComplete (see runner.Runner's doc comment) can never
