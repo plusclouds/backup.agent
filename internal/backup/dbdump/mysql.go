@@ -52,7 +52,11 @@ func (m *mysql) Dump(ctx context.Context, database, destDir string) (string, err
 }
 
 func (m *mysql) connArgs() []string {
-	var args []string
+	// Without this the client takes its character set from the operating
+	// system's code page; on Windows that can be one MySQL does not know
+	// (cp857, Turkish), which adds a warning to every error and leaves
+	// non-ASCII database names at the mercy of the fallback.
+	args := []string{"--default-character-set=utf8mb4"}
 	if m.conn.Socket != "" {
 		args = append(args, "--socket="+m.conn.Socket)
 	}
