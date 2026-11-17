@@ -73,7 +73,16 @@ ALTER ROLE db_backupoperator ADD MEMBER [NT AUTHORITY\SYSTEM];
 Or use a SQL Server login instead, by setting `user` and `password` on the
 connection.
 
-A named instance goes in the connection settings:
+A named instance such as `SQLEXPRESS` is found automatically: when the
+connection settings name no `host`, `port` or `instance`, the agent looks up
+the SQL Server instances installed on the machine. It uses the default
+instance if there is one, otherwise the only named instance. Connecting to a
+named instance relies on the **SQL Server Browser** service running, the
+same as for any other SQL Server client.
+
+With several named instances and no default one the agent does not guess —
+the job fails with a message listing them. Choose one in the connection
+settings:
 
 ```yaml
 databases:
