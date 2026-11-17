@@ -59,6 +59,14 @@ type DumpDirProvider interface {
 	DumpDir(ctx context.Context) (string, error)
 }
 
+// UnlistedProvider is implemented by drivers that leave some real databases
+// out of ListDatabases because they are rarely worth backing up. Such a
+// database is not offered and not part of "all", but a job that names it
+// explicitly is still honoured rather than failing as "not found".
+type UnlistedProvider interface {
+	UnlistedDatabases() []string
+}
+
 // Factory builds a Driver. New is the real one; tests substitute their own.
 type Factory func(engine string, conn Conn) (Driver, error)
 
@@ -101,6 +109,11 @@ func Select(ctx context.Context, d Driver, requested []string, all bool) ([]stri
 	known := make(map[string]bool, len(available))
 	for _, name := range available {
 		known[name] = true
+	}
+	if u, ok := d.(UnlistedProvider); ok {
+		for _, name := range u.UnlistedDatabases() {
+			known[name] = true
+		}
 	}
 	seen := make(map[string]bool, len(requested))
 	var selected, missing []string
