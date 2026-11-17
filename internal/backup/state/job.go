@@ -10,7 +10,27 @@ type JobType string
 const (
 	JobTypeFiles  JobType = "files"
 	JobTypeScript JobType = "script"
+	// JobTypeDatabase dumps the databases named in Job.Database with the
+	// engine's own tooling and backs up the resulting dump files — see
+	// docs/backup.agent/updates/2026-11-16-database-jobs.md.
+	JobTypeDatabase JobType = "database"
 )
+
+// DatabaseSpec is the "database" object of a job_type "database" job: which
+// engine to dump and which databases. It deliberately carries no credentials
+// — Connection only names an entry in the agent's local config (the
+// "databases" section of stash.yaml), so database passwords never travel
+// through the platform or NATS.
+type DatabaseSpec struct {
+	// Engine is "postgres", "mysql" or "mssql".
+	Engine string `json:"engine"`
+	// Connection names a local connection for Engine; empty means "default".
+	Connection string `json:"connection,omitempty"`
+	// Databases are the databases to back up. Ignored when All is set.
+	Databases []string `json:"databases,omitempty"`
+	// All backs up every user database present at run time.
+	All bool `json:"all,omitempty"`
+}
 
 // Job is the desired-state job definition as sent by the platform in a
 // full_sync command's payload.jobs entries.
@@ -36,6 +56,9 @@ type Job struct {
 	// enforces WORM server-side, the agent doesn't change write behavior
 	// based on this flag. Preserved here for round-tripping/visibility only.
 	ObjectLockEnabled bool `json:"object_lock_enabled,omitempty"`
+	// Database is set for job_type "database" only. SourcePaths is ignored
+	// for that type: the agent owns the dump directory it backs up.
+	Database *DatabaseSpec `json:"database,omitempty"`
 }
 
 // JobState is a Job plus agent-owned runtime bookkeeping that survives

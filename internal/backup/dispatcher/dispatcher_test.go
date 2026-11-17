@@ -3,13 +3,16 @@ package dispatcher
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"go.uber.org/zap"
 
+	"github.com/plusclouds/ubuntu-agent/internal/backup/dbdump"
 	"github.com/plusclouds/ubuntu-agent/internal/backup/engine"
 	"github.com/plusclouds/ubuntu-agent/internal/backup/engine/fake"
 	"github.com/plusclouds/ubuntu-agent/internal/backup/registry"
@@ -270,5 +273,100 @@ func TestDispatchRevokeTriggersShutdownAfterGracePeriod(t *testing.T) {
 		}
 	case <-time.After(revokeGracePeriod + time.Second):
 		t.Fatalf("expected shutdown to be invoked after the grace period")
+	}
+}
+
+type listOnlyDriver struct {
+	names []string
+	err   error
+}
+
+func (d listOnlyDriver) ListDatabases(context.Context) ([]string, error) { return d.names, d.err }
+func (d listOnlyDriver) Dump(context.Context, string, string) (string, error) {
+	return "", errors.New("not used")
+}
+
+func TestDispatchListDatabases(t *testing.T) {
+	disp, _, _, _ := newTestDispatcher(t)
+	var gotEngine, gotConnection string
+	disp.runner.DBConn = func(engineName, connection string) dbdump.Conn {
+		gotEngine, gotConnection = engineName, connection
+		return dbdump.Conn{}
+	}
+	disp.runner.NewDriver = func(string, dbdump.Conn) (dbdump.Driver, error) {
+		return listOnlyDriver{names: []string{"app", "shop"}}, nil
+	}
+
+	result := disp.Dispatch(context.Background(), command("list_databases", map[string]any{"engine": "mssql", "connection": "reporting"}))
+	rp := decodeResult(t, result)
+	if rp.Status != protocol.StatusCompleted {
+		t.Fatalf("expected completed, got %q (msg=%q)", rp.Status, rp.Message)
+	}
+	if gotEngine != "mssql" || gotConnection != "reporting" {
+		t.Errorf("resolved connection %s/%s, want mssql/reporting", gotEngine, gotConnection)
+	}
+	out, ok := rp.Output.(map[string]any)
+	if !ok {
+		t.Fatalf("expected output to be a map, got %T", rp.Output)
+	}
+	names, _ := out["databases"].([]any)
+	if len(names) != 2 || names[0] != "app" || names[1] != "shop" {
+		t.Errorf("expected databases [app shop], got %v", out["databases"])
+	}
+}
+
+// An empty server must come back as "databases": [] — a JSON null would
+// break a picker that iterates the list.
+func TestDispatchListDatabasesEmptyIsArrayNotNull(t *testing.T) {
+	disp, _, _, _ := newTestDispatcher(t)
+	disp.runner.NewDriver = func(string, dbdump.Conn) (dbdump.Driver, error) { return listOnlyDriver{}, nil }
+
+	result := disp.Dispatch(context.Background(), command("list_databases", map[string]any{"engine": "mysql"}))
+	if !strings.Contains(string(result.Payload), `"databases":[]`) {
+		t.Errorf("expected an empty JSON array, got payload %s", result.Payload)
+	}
+}
+
+func TestDispatchListDatabasesErrors(t *testing.T) {
+	disp, _, _, _ := newTestDispatcher(t)
+
+	rp := decodeResult(t, disp.Dispatch(context.Background(), command("list_databases", map[string]any{})))
+	if rp.Status != protocol.StatusRejected {
+		t.Errorf("missing engine: expected rejected, got %q", rp.Status)
+	}
+
+	// The real factory, so an unsupported engine is reported by name.
+	rp = decodeResult(t, disp.Dispatch(context.Background(), command("list_databases", map[string]any{"engine": "oracle"})))
+	if rp.Status != protocol.StatusFailed || !strings.Contains(rp.Message, "oracle") {
+		t.Errorf("unknown engine: expected failed mentioning the engine, got %q (%q)", rp.Status, rp.Message)
+	}
+
+	disp.runner.NewDriver = func(string, dbdump.Conn) (dbdump.Driver, error) {
+		return listOnlyDriver{err: errors.New("login failed for user 'sa'")}, nil
+	}
+	rp = decodeResult(t, disp.Dispatch(context.Background(), command("list_databases", map[string]any{"engine": "mssql"})))
+	if rp.Status != protocol.StatusFailed || !strings.Contains(rp.Message, "login failed") {
+		t.Errorf("connection failure: expected failed with the server's error, got %q (%q)", rp.Status, rp.Message)
+	}
+}
+
+func TestDispatchFullSyncKeepsDatabaseSpec(t *testing.T) {
+	disp, _, st, _ := newTestDispatcher(t)
+	env := command("full_sync", map[string]any{
+		"jobs": []map[string]any{{
+			"uuid": "job-db", "name": "nightly-sql", "job_type": "database", "schedule": "0 2 * * *",
+			"database": map[string]any{"engine": "mssql", "databases": []string{"crm", "erp"}},
+		}},
+	})
+	if rp := decodeResult(t, disp.Dispatch(context.Background(), env)); rp.Status != protocol.StatusCompleted {
+		t.Fatalf("expected completed, got %q (msg=%q)", rp.Status, rp.Message)
+	}
+
+	job, ok := st.GetJob("job-db")
+	if !ok || job.JobType != state.JobTypeDatabase || job.Database == nil {
+		t.Fatalf("database job not persisted: %+v", job)
+	}
+	if job.Database.Engine != "mssql" || strings.Join(job.Database.Databases, ",") != "crm,erp" {
+		t.Errorf("database spec did not round-trip: %+v", job.Database)
 	}
 }

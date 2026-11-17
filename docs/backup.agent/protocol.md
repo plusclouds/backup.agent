@@ -47,6 +47,7 @@ Published by `NextDeveloper\S3\Services\BackupAgentCommandService`. Envelope
 | `resume_job` | `{job_uuid}` | |
 | `cancel_job` | `{job_uuid}` | Cancel a currently-running job. |
 | `verify_snapshot` | `{job_uuid, snapshot_id}` | Restore the given Kopia snapshot to a temp location and checksum-verify it. Long `timeout_s` (1800s) — a restore+checksum pass takes a while. |
+| `list_databases` | `{engine, connection?}` | List the databases the agent can back up for `engine` (`postgres`, `mysql`, `mssql`) — the data behind the database picker of a `job_type: "database"` job. `result.output` is `{engine, databases: ["..."]}` (system databases excluded). `connection` names a local connection on the agent; omit it for `"default"`. A connection or login failure comes back as `status: "failed"` with the database client's own error text. See `updates/2026-11-16-database-jobs.md`. |
 | `revoke` | `{reason}` | Shut down cleanly. Sent before `agent_api_key` is cleared — the agent has a brief window to react before it's rejected on reconnect. |
 
 ### `full_sync` job entry shape
@@ -57,7 +58,7 @@ Each item in `payload.jobs` (see `BackupJobsService::buildFullSyncPayload()`):
 {
   "uuid": "...",
   "name": "nightly-mysql-dump",
-  "job_type": "files|script",
+  "job_type": "files|script|database",
   "source_paths": ["/var/backups/mysql"],
   "pre_script": "#!/bin/bash\nmysqldump ... > /var/backups/mysql/dump.sql\n",
   "script_timeout_s": 900,
@@ -66,7 +67,13 @@ Each item in `payload.jobs` (see `BackupJobsService::buildFullSyncPayload()`):
   "keep_for_days": null,
   "bandwidth_limit_mbps": 50,
   "bucket_name": "backup-agent-a1b2c3d4",
-  "object_lock_enabled": false
+  "object_lock_enabled": false,
+  "database": {
+    "engine": "postgres|mysql|mssql",
+    "connection": "default",
+    "databases": ["crm", "erp"],
+    "all": false
+  }
 }
 ```
 
@@ -76,6 +83,17 @@ Each item in `payload.jobs` (see `BackupJobsService::buildFullSyncPayload()`):
   touches Kopia. A failed pre-script is never allowed to look like a successful
   backup (see `overview.md` — this is the direct answer to the "silent failure"
   problem the design research turned up).
+- `job_type: "database"` (added `updates/2026-11-16-database-jobs.md`) — the
+  agent dumps the databases named in `database` with the engine's own tooling
+  (`pg_dump`, `mysqldump`, SQL Server `BACKUP DATABASE`), then snapshots the
+  dump files. `source_paths` and `pre_script` are ignored. `database.all: true`
+  means "every user database present at run time" and overrides
+  `database.databases`. `script_timeout_s` bounds the whole dump phase
+  (default 3600s for this type). A database that no longer exists, a failed or
+  empty dump, or a timeout fails the run *before* anything is uploaded — same
+  guarantee as a failing `pre_script`. **The payload never carries database
+  credentials:** `database.connection` only names connection settings stored
+  in the agent's own config file.
 - `schedule` is a standard cron expression, evaluated **by the agent**, not the
   platform (see `overview.md`).
 - `bucket_name` (added `updates/2026-07-04-per-job-destination-bucket.md`) — the

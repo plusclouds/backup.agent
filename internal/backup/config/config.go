@@ -15,6 +15,7 @@ import (
 	"github.com/spf13/viper"
 	"gopkg.in/yaml.v3"
 
+	"github.com/plusclouds/ubuntu-agent/internal/backup/dbdump"
 	vmconfig "github.com/plusclouds/ubuntu-agent/internal/config"
 )
 
@@ -46,6 +47,24 @@ type Config struct {
 	AccessKey AccessKeyConfig     `mapstructure:"access_key" yaml:"access_key"`
 	Agent     AgentConfig         `mapstructure:"agent" yaml:"agent"`
 	Log       vmconfig.LogConfig  `mapstructure:"log" yaml:"log"`
+	// Databases holds local connection settings for job_type "database" jobs,
+	// keyed by engine ("postgres", "mysql", "mssql") then by connection name
+	// ("default" unless the job names another). It is written by the
+	// operator, never by the platform: database credentials stay on this
+	// machine. Entirely optional — a missing entry means the engine's own
+	// local defaults.
+	Databases map[string]map[string]dbdump.Conn `mapstructure:"databases" yaml:"databases,omitempty"`
+}
+
+// DBConn returns the local connection settings for engine/name, or the zero
+// Conn (engine defaults) if none is configured. An empty name means
+// dbdump.DefaultConnection. Lookups are case-insensitive because viper
+// lowercases every key it reads.
+func (c *Config) DBConn(engine, name string) dbdump.Conn {
+	if name == "" {
+		name = dbdump.DefaultConnection
+	}
+	return c.Databases[strings.ToLower(engine)][strings.ToLower(name)]
 }
 
 // BucketConfig holds the agent's dedicated S3-compatible bucket, returned at

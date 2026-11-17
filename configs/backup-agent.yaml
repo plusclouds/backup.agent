@@ -37,3 +37,24 @@ log:
   level: info
   format: json
   file: /var/log/plusclouds/backup-agent.log
+
+# Optional: local connection settings for job_type "database" jobs, keyed by
+# engine (postgres, mysql, mssql) then connection name ("default" unless the
+# job names another). Credentials stay here — the platform never sees them.
+# With nothing configured the agent uses each engine's own local defaults
+# (client defaults for Postgres/MySQL, Windows integrated auth for SQL Server).
+# See docs/backup.agent/updates/2026-11-16-database-jobs.md.
+#
+# databases:
+#   mssql:
+#     default:
+#       host: localhost
+#       port: 1433
+#       instance: ""          # named instance, e.g. SQLEXPRESS
+#       user: ""              # empty = Windows integrated auth
+#       password: ""
+#       dump_dir: 'D:\StashDumps'   # writable by the SQL Server service account
+#   postgres:
+#     default: { host: localhost, port: 5432, user: postgres, password: "" }
+#   mysql:
+#     default: { host: 127.0.0.1, port: 3306, user: backup, password: "", bin_dir: "" }

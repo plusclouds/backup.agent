@@ -28,6 +28,7 @@ func main() {
 	root.AddCommand(newRegisterCmd())
 	root.AddCommand(newRunCmd())
 	root.AddCommand(newStatusCmd())
+	root.AddCommand(newDBCmd())
 
 	if err := root.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)

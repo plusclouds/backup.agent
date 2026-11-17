@@ -165,6 +165,8 @@ func (d *Dispatcher) run(ctx context.Context, op string, raw json.RawMessage) (a
 		return d.cancelJob(raw)
 	case "verify_snapshot":
 		return d.verifySnapshot(ctx, raw)
+	case "list_databases":
+		return d.listDatabases(ctx, raw)
 	case "revoke":
 		return d.revoke(raw)
 	default:
@@ -188,6 +190,32 @@ func (d *Dispatcher) fullSync(raw json.RawMessage) (any, error) {
 		d.logger.Warn("full_sync: some jobs have invalid schedules", zap.Error(err))
 	}
 	return map[string]any{"jobs": len(p.Jobs)}, nil
+}
+
+// listDatabases answers the platform's "which databases can this agent back
+// up?" question for one engine — the data behind the database picker of a
+// job_type "database" job. A connection failure is an execution failure
+// (status "failed", with the client's own error text), not a rejection.
+func (d *Dispatcher) listDatabases(ctx context.Context, raw json.RawMessage) (any, error) {
+	var p struct {
+		Engine     string `json:"engine"`
+		Connection string `json:"connection"`
+	}
+	if err := json.Unmarshal(raw, &p); err != nil {
+		return nil, rejected("could not decode list_databases params: %s", err)
+	}
+	if p.Engine == "" {
+		return nil, rejected("list_databases requires an engine")
+	}
+
+	names, err := d.runner.ListDatabases(ctx, p.Engine, p.Connection)
+	if err != nil {
+		return nil, fmt.Errorf("listing %s databases: %w", p.Engine, err)
+	}
+	if names == nil {
+		names = []string{} // encode as [], not null
+	}
+	return map[string]any{"engine": p.Engine, "databases": names}, nil
 }
 
 func (d *Dispatcher) runJobNow(ctx context.Context, raw json.RawMessage) (any, error) {
