@@ -7,6 +7,15 @@ import "github.com/wailsapp/wails/v2"
 func main() {
 	app := NewApp()
 
+	// Already running: let Wails pass this launch on to that copy and exit,
+	// without setting up a tray icon first (see handOverToRunningInstance).
+	if handOverToRunningInstance() {
+		if err := wails.Run(wailsAppOptions(app)); err != nil {
+			println("Error:", err.Error())
+		}
+		return
+	}
+
 	// systray owns the process's main goroutine (see tray.go's doc comment);
 	// Wails itself starts from the tray's onReady callback, in its own
 	// goroutine, once the tray icon exists. Excluded from the `bindings`
