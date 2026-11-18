@@ -85,8 +85,13 @@ jobs:
             dist/stash-desktop_*.deb
             dist/stash-desktop-*.rpm
 
+  # Intel runner on purpose. macos-latest is Apple Silicon, and GitHub's arm64
+  # pool can be short enough that the job is never given a machine: it sits
+  # queued for 15 minutes and is then cancelled without running a step (this
+  # happened to v3.2.0 through v3.2.3). The Intel pool is a separate queue,
+  # and the universal build produces the same arm64 + amd64 app from either.
   desktop-macos:
-    runs-on: macos-latest
+    runs-on: macos-15-intel
     steps:
       - uses: actions/checkout@v4
         with:
@@ -131,10 +136,22 @@ jobs:
           name: desktop-windows
           path: desktop/build/bin/*.exe
 
+  # The macOS desktop app is wanted but not required: when its job gets no
+  # runner the release is still published with everything else, instead of
+  # not at all. Re-running the macOS job afterwards re-runs this job too,
+  # which adds the missing zip to the existing release.
   release:
     needs: [cli, desktop-linux, desktop-macos, desktop-windows]
+    if: >-
+      ${{ always()
+          && needs.cli.result == 'success'
+          && needs.desktop-linux.result == 'success'
+          && needs.desktop-windows.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
+      - name: Warn when the macOS desktop app is missing
+        if: ${{ needs.desktop-macos.result != 'success' }}
+        run: echo "::warning title=macOS desktop app missing::desktop-macos ended as '${{ needs.desktop-macos.result }}'. This release has no stash-desktop-darwin-universal.app.zip - re-run that job to add it."
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
