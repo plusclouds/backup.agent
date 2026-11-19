@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -14,6 +15,24 @@ import (
 	"github.com/plusclouds/ubuntu-agent/internal/backup/state"
 	vmconfig "github.com/plusclouds/ubuntu-agent/internal/config"
 )
+
+// registerTokenEnv is an alternative to --token. A command line is readable
+// by every local user while the process lives, so anything that runs
+// `stash register` on someone's behalf (the PlusClouds VM agent's
+// stash.install, an install script) should pass the token this way.
+const registerTokenEnv = "STASH_REGISTER_TOKEN"
+
+// resolveRegisterToken returns the token to register with: --token when it
+// was given, otherwise the environment variable.
+func resolveRegisterToken(flagValue string, getenv func(string) string) (string, error) {
+	if token := strings.TrimSpace(flagValue); token != "" {
+		return token, nil
+	}
+	if token := strings.TrimSpace(getenv(registerTokenEnv)); token != "" {
+		return token, nil
+	}
+	return "", fmt.Errorf("a registration token is required: pass --token or set %s", registerTokenEnv)
+}
 
 func newRegisterCmd() *cobra.Command {
 	var token, endpoint string
@@ -27,14 +46,17 @@ func newRegisterCmd() *cobra.Command {
 			"initial job list to the config/state files. The token is single-use — losing\n" +
 			"the resulting config means requesting a new token and registering again.",
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			token, err := resolveRegisterToken(token, os.Getenv)
+			if err != nil {
+				return err
+			}
 			return runRegister(cmd.Context(), token, endpoint, showRaw)
 		},
 	}
 
-	cmd.Flags().StringVar(&token, "token", "", "One-time registration token (required)")
+	cmd.Flags().StringVar(&token, "token", "", "One-time registration token (required unless "+registerTokenEnv+" is set)")
 	cmd.Flags().StringVar(&endpoint, "endpoint", "", "Platform API base URL, e.g. https://api.example.com (required)")
 	cmd.Flags().BoolVar(&showRaw, "debug", false, "Print the platform's raw HTTP response body (useful for diagnosing unexpected/missing fields)")
-	cmd.MarkFlagRequired("token")    //nolint:errcheck
 	cmd.MarkFlagRequired("endpoint") //nolint:errcheck
 
 	return cmd
