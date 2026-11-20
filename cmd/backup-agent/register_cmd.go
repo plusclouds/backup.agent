@@ -18,8 +18,8 @@ import (
 
 // registerTokenEnv is an alternative to --token. A command line is readable
 // by every local user while the process lives, so anything that runs
-// `stash register` on someone's behalf (the PlusClouds VM agent's
-// stash.install, an install script) should pass the token this way.
+// `stash register` on someone's behalf (the toolkit's stash service role, an
+// install script) should pass the token this way.
 const registerTokenEnv = "STASH_REGISTER_TOKEN"
 
 // resolveRegisterToken returns the token to register with: --token when it
